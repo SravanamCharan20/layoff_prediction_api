@@ -2,13 +2,58 @@ from flask import Flask, request, jsonify
 import joblib
 import numpy as np
 import pandas as pd
-import os  # Added to access environment variables
+import os
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Load trained model and label encoder
-model = joblib.load("layoff_risk_model.pkl")
-label_encoder = joblib.load("label_encoder.pkl")
+# Initialize model and label encoder as None
+model = None
+label_encoder = None
+
+def load_models():
+    global model, label_encoder
+    try:
+        # Get the current directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(current_dir, "layoff_risk_model.pkl")
+        encoder_path = os.path.join(current_dir, "label_encoder.pkl")
+        
+        logger.info(f"Current directory: {current_dir}")
+        logger.info(f"Model path: {model_path}")
+        logger.info(f"Encoder path: {encoder_path}")
+        
+        # Check if files exist
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at {model_path}")
+        if not os.path.exists(encoder_path):
+            raise FileNotFoundError(f"Label encoder file not found at {encoder_path}")
+            
+        logger.info("Loading model and label encoder...")
+        model = joblib.load(model_path)
+        label_encoder = joblib.load(encoder_path)
+        logger.info("Model and label encoder loaded successfully")
+        
+        # Log model type and attributes
+        logger.info(f"Model type: {type(model)}")
+        logger.info(f"Model attributes: {dir(model)}")
+        
+    except Exception as e:
+        logger.error(f"Error loading models: {str(e)}")
+        logger.error(f"Python version: {sys.version}")
+        logger.error(f"Joblib version: {joblib.__version__}")
+        raise
+
+# Load models when the app starts
+try:
+    load_models()
+except Exception as e:
+    logger.error(f"Failed to load models during startup: {str(e)}")
 
 # Define expected input features (same as during training)
 categorical_features = [
@@ -24,7 +69,14 @@ numerical_features = [
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    if model is None or label_encoder is None:
+        try:
+            load_models()
+        except Exception as e:
+            return jsonify({"error": f"Model loading failed: {str(e)}"}), 500
+
     data = request.get_json()
+    logger.info(f"Received prediction request with data: {data}")
 
     try:
         # Combine inputs into a DataFrame
@@ -42,10 +94,12 @@ def predict():
         prediction_encoded = model.predict(input_df)
         prediction_label = label_encoder.inverse_transform(prediction_encoded)[0]
 
+        logger.info(f"Prediction successful: {prediction_label}")
         return jsonify({"layoff_risk": prediction_label})
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        logger.error(f"Prediction error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 # Updated port binding for Render
 if __name__ == "__main__":
