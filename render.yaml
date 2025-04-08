@@ -1,0 +1,10 @@
+services:
+  - type: web
+    runtime: python
+    name: layoff-predictor
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
+    envVars:
+      - key: FLASK_ENV
+        value: production
