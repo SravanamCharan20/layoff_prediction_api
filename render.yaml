@@ -10,6 +10,3 @@ services:
         value: production
       - key: PORT
         value: 10000
-    include:
-      - layoff_risk_model.pkl
-      - label_encoder.pkl
